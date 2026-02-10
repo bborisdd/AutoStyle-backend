@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { query } = require('../db');
+const { authenticateToken, generateToken, checkOwnership } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -57,8 +58,12 @@ router.post('/register', async (req, res) => {
 
         const user = result.rows[0];
 
+        // Генерация JWT токена
+        const token = generateToken(user);
+
         res.status(201).json({
             message: 'Регистрация успешна',
+            token,
             user: {
                 id: user.id,
                 name: user.name,
@@ -111,8 +116,12 @@ router.post('/login', async (req, res) => {
             });
         }
 
+        // Генерация JWT токена
+        const token = generateToken(user);
+
         res.json({
             message: 'Вход выполнен успешно',
+            token,
             user: {
                 id: user.id,
                 name: user.name,
@@ -129,9 +138,31 @@ router.post('/login', async (req, res) => {
 });
 
 /**
+ * GET /api/users/me - Получение текущего пользователя по токену
+ */
+router.get('/me', authenticateToken, async (req, res) => {
+    try {
+        const result = await query(
+            'SELECT id, name, email, phone, created_at FROM users WHERE id = $1',
+            [req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+
+        res.json({ user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Ошибка получения пользователя:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+/**
  * GET /api/users/:id - Получение информации о пользователе
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, checkOwnership, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -155,7 +186,7 @@ router.get('/:id', async (req, res) => {
 /**
  * PUT /api/users/:id - Обновление данных пользователя
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, checkOwnership, async (req, res) => {
     try {
         const { id } = req.params;
         const { name, phone } = req.body;
@@ -194,7 +225,7 @@ router.put('/:id', async (req, res) => {
 /**
  * DELETE /api/users/:id - Удаление пользователя
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, checkOwnership, async (req, res) => {
     try {
         const { id } = req.params;
 
