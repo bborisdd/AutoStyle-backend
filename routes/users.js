@@ -40,7 +40,7 @@ router.post('/register', async (req, res) => {
 
         if (existingUser.rows.length > 0) {
             return res.status(409).json({ 
-                error: 'Пользователь с таким email уже существует' 
+                error: 'Не удалось зарегистрироваться. Проверьте введённые данные' 
             });
         }
 
